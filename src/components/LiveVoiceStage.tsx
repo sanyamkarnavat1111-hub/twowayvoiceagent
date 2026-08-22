@@ -1,29 +1,77 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Mic, Volume2, Sparkles, Database, ArrowRight, Play, Square, RefreshCw, Zap, Radio, CheckCircle2, ShieldCheck } from "lucide-react";
-import { BotSettings, BotState, ChatMessage, RetrievedChunkMatch } from "../types.js";
+import { Mic, Volume2, Sparkles, Database, ArrowRight, Play, Square, Globe, ShieldCheck } from "lucide-react";
+import { BotSettings, BotState, ChatMessage, LanguageCode, RetrievedChunkMatch } from "../types.js";
 import { BrowserSpeechRecognizer, MicAudioVisualizer, VoiceSpeechEngine } from "../utils/audioUtils.js";
 
 interface LiveVoiceStageProps {
   botState: BotState;
   setBotState: (state: BotState) => void;
   settings: BotSettings;
+  setSettings: React.Dispatch<React.SetStateAction<BotSettings>>;
   messages: ChatMessage[];
   onSendMessage: (text: string, isVoice?: boolean) => Promise<void>;
   lastBotMessage?: ChatMessage;
   speechEngine: VoiceSpeechEngine;
 }
 
-const SAMPLE_VOICE_QUERIES = [
-  "What is our enterprise cloud uptime SLA and credit policy?",
-  "What is our refund policy for annual vs monthly subscriptions?",
-  "What are our developer API rate limits and webhook retry schedules?",
-  "When does the voice bot trigger live human engineer hand-off?",
+const SAMPLE_MULTILINGUAL_QUERIES = [
+  {
+    lang: "en",
+    flag: "🇺🇸",
+    label: "English",
+    query: "What is our enterprise cloud uptime SLA and credit policy?",
+  },
+  {
+    lang: "es",
+    flag: "🇪🇸",
+    label: "Español",
+    query: "¿Cuál es la política de reembolso para suscripciones anuales y mensuales?",
+  },
+  {
+    lang: "hi",
+    flag: "🇮🇳",
+    label: "हिन्दी",
+    query: "क्लाउड अपटाइम एसएलए और 99.99% से कम होने पर क्रेडिट पॉलिसी क्या है?",
+  },
+  {
+    lang: "fr",
+    flag: "🇫🇷",
+    label: "Français",
+    query: "Quelles sont les limites de débit d'API et la politique de webhook ?",
+  },
+  {
+    lang: "de",
+    flag: "🇩🇪",
+    label: "Deutsch",
+    query: "Wann leitet der VoiceBot das Gespräch an einen menschlichen Support-Mitarbeiter weiter?",
+  },
+  {
+    lang: "ja",
+    flag: "🇯🇵",
+    label: "日本語",
+    query: "エンタープライズクラウドの稼働率SLAと返金ポリシーを教えてください。",
+  },
+];
+
+const LANGUAGE_OPTIONS: { code: LanguageCode; label: string; flag: string }[] = [
+  { code: "auto", label: "Auto-Detect Language", flag: "🌐" },
+  { code: "en", label: "English", flag: "🇺🇸" },
+  { code: "es", label: "Español (Spanish)", flag: "🇪🇸" },
+  { code: "hi", label: "हिन्दी (Hindi)", flag: "🇮🇳" },
+  { code: "fr", label: "Français (French)", flag: "🇫🇷" },
+  { code: "de", label: "Deutsch (German)", flag: "🇩🇪" },
+  { code: "ja", label: "日本語 (Japanese)", flag: "🇯🇵" },
+  { code: "zh", label: "中文 (Chinese)", flag: "🇨🇳" },
+  { code: "pt", label: "Português", flag: "🇧🇷" },
+  { code: "it", label: "Italiano", flag: "🇮🇹" },
+  { code: "ar", label: "العربية", flag: "🇸🇦" },
 ];
 
 export const LiveVoiceStage: React.FC<LiveVoiceStageProps> = ({
   botState,
   setBotState,
   settings,
+  setSettings,
   messages,
   onSendMessage,
   lastBotMessage,
@@ -39,7 +87,7 @@ export const LiveVoiceStage: React.FC<LiveVoiceStageProps> = ({
   const visualizerRef = useRef<MicAudioVisualizer | null>(null);
 
   useEffect(() => {
-    recognizerRef.current = new BrowserSpeechRecognizer();
+    recognizerRef.current = new BrowserSpeechRecognizer(settings.language);
     visualizerRef.current = new MicAudioVisualizer();
 
     return () => {
@@ -47,6 +95,10 @@ export const LiveVoiceStage: React.FC<LiveVoiceStageProps> = ({
       recognizerRef.current?.stopListening();
     };
   }, []);
+
+  useEffect(() => {
+    recognizerRef.current?.setLanguage(settings.language);
+  }, [settings.language]);
 
   const handleStartListening = async () => {
     try {
@@ -58,12 +110,12 @@ export const LiveVoiceStage: React.FC<LiveVoiceStageProps> = ({
       setIsRecording(true);
       setLiveTranscript("");
 
-      // Start audio waveform visualizer
+      // Start waveform audio visualizer
       visualizerRef.current?.start((vol) => {
         setMicVolume(Math.min(1, vol * 3));
       });
 
-      // Start browser speech recognition
+      // Start browser multilingual speech recognition
       recognizerRef.current?.startListening(
         (transcript, isFinal) => {
           setLiveTranscript(transcript);
@@ -78,12 +130,12 @@ export const LiveVoiceStage: React.FC<LiveVoiceStageProps> = ({
           setBotState("idle");
         },
         () => {
-          // If stopped without final event but we have transcript
           if (isRecording) {
             setIsRecording(false);
             visualizerRef.current?.stop();
           }
-        }
+        },
+        settings.language
       );
     } catch (err: any) {
       console.error("Mic access or speech recognition error:", err);
@@ -126,6 +178,7 @@ export const LiveVoiceStage: React.FC<LiveVoiceStageProps> = ({
     speechEngine.speak(
       message.content,
       settings.voiceName,
+      message.detectedLanguage || "en",
       () => setBotState("speaking"),
       () => setBotState("idle")
     );
@@ -137,20 +190,41 @@ export const LiveVoiceStage: React.FC<LiveVoiceStageProps> = ({
       <div className="bg-gradient-to-b from-slate-900 via-indigo-950 to-slate-900 rounded-3xl p-6 md:p-10 text-white shadow-xl relative overflow-hidden border border-indigo-900/40">
         {/* Ambient Glows */}
         <div className="absolute top-0 right-1/4 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute bottom-0 left-1/4 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute bottom-0 left-1/4 w-96 h-96 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
 
         <div className="relative z-10 flex flex-col items-center text-center">
-          {/* Status Subtitle */}
-          <div className="flex items-center gap-2 mb-6">
+          {/* Status & Language Select Subtitle */}
+          <div className="flex flex-wrap items-center justify-center gap-2 mb-6">
             <span className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-full bg-white/10 backdrop-blur-md border border-white/15 text-indigo-200">
-              <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
-              TypeScript Client Vector RAG • Zero-Exhaustion Safe • Voice: {settings.voiceName}
+              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+              Multilingual Voice RAG • Persona: {settings.voiceName}
             </span>
+
+            {/* Language Quick Dropdown */}
+            <div className="flex items-center gap-1.5 bg-black/40 backdrop-blur-md px-2.5 py-1 rounded-full border border-white/15 text-xs">
+              <Globe className="w-3.5 h-3.5 text-amber-400" />
+              <select
+                id="voice-language-selector"
+                value={settings.language}
+                onChange={(e) =>
+                  setSettings((prev) => ({
+                    ...prev,
+                    language: e.target.value as LanguageCode,
+                  }))
+                }
+                className="bg-transparent text-white text-xs font-medium focus:outline-none cursor-pointer"
+              >
+                {LANGUAGE_OPTIONS.map((opt) => (
+                  <option key={opt.code} value={opt.code} className="bg-slate-900 text-white">
+                    {opt.flag} {opt.label}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
 
           {/* Animated Central Voice Orb */}
           <div className="relative flex items-center justify-center my-4">
-            {/* Outer pulsating rings */}
             <div
               className={`absolute w-56 h-56 rounded-full transition-all duration-300 pointer-events-none ${
                 botState === "listening"
@@ -158,7 +232,7 @@ export const LiveVoiceStage: React.FC<LiveVoiceStageProps> = ({
                   : botState === "speaking"
                   ? "bg-violet-500/20 animate-pulse scale-105"
                   : botState === "retrieving" || botState === "thinking"
-                  ? "bg-cyan-500/20 animate-pulse"
+                  ? "bg-amber-500/20 animate-pulse"
                   : "bg-indigo-500/10"
               }`}
               style={{
@@ -186,7 +260,7 @@ export const LiveVoiceStage: React.FC<LiveVoiceStageProps> = ({
                   : botState === "speaking"
                   ? "bg-gradient-to-tr from-violet-600 via-indigo-600 to-purple-500 ring-4 ring-violet-400/50 animate-pulse"
                   : botState === "retrieving" || botState === "thinking"
-                  ? "bg-gradient-to-tr from-cyan-600 via-blue-600 to-indigo-600 ring-4 ring-cyan-400/50"
+                  ? "bg-gradient-to-tr from-amber-500 via-orange-500 to-indigo-600 ring-4 ring-amber-400/50"
                   : "bg-gradient-to-tr from-indigo-600 via-violet-600 to-cyan-500 hover:scale-105 ring-4 ring-indigo-400/30"
               }`}
             >
@@ -202,7 +276,7 @@ export const LiveVoiceStage: React.FC<LiveVoiceStageProps> = ({
                 </>
               ) : botState === "retrieving" ? (
                 <>
-                  <Database className="w-9 h-9 text-cyan-200 mb-1 animate-spin" />
+                  <Database className="w-9 h-9 text-amber-200 mb-1 animate-spin" />
                   <span className="text-[10px] font-bold tracking-wider uppercase">Vector RAG</span>
                 </>
               ) : botState === "thinking" ? (
@@ -220,24 +294,24 @@ export const LiveVoiceStage: React.FC<LiveVoiceStageProps> = ({
           </div>
 
           {/* Voice Prompt & Instructions */}
-          <div className="mt-4 max-w-md">
+          <div className="mt-4 max-w-lg">
             <h2 className="text-xl font-bold text-slate-100">
               {botState === "listening"
                 ? liveTranscript
                   ? `"${liveTranscript}"`
-                  : "Listening... Speak your question now"
+                  : "Listening... Speak in any language (English, Spanish, Hindi, French, etc.)"
                 : botState === "transcribing"
                 ? "Processing speech..."
                 : botState === "retrieving"
                 ? "Searching vector database for matching documentation..."
                 : botState === "thinking"
-                ? "Formulating voice response..."
+                ? "Formulating grounded response in your language..."
                 : botState === "speaking"
-                ? "Answering with voice output..."
-                : "Ask any company documentation question"}
+                ? "Speaking answer in your language..."
+                : "Ask any question in your preferred language"}
             </h2>
             <p className="text-xs text-slate-400 mt-1">
-              Ask about SLAs (99.99%), disaster recovery RPO/RTO, refund policies, API rate limits, or support escalation protocols.
+              Speak in English, Spanish (Español), Hindi (हिन्दी), French (Français), German (Deutsch), or Japanese. The VoiceBot will formulate and speak the answer in the exact same language.
             </p>
           </div>
 
@@ -256,21 +330,27 @@ export const LiveVoiceStage: React.FC<LiveVoiceStageProps> = ({
             </div>
           )}
 
-          {/* Quick Query Starter Pills */}
+          {/* Multilingual Starter Prompts */}
           <div className="w-full mt-6 pt-6 border-t border-white/10">
-            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3 text-left">
-              Try asking about our documentation:
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3 text-left flex items-center justify-between">
+              <span>Try asking in multiple languages:</span>
+              <span className="text-[11px] text-amber-300 font-normal">Answers are spoken in the matching language</span>
             </p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-left">
-              {SAMPLE_VOICE_QUERIES.map((q, idx) => (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 text-left">
+              {SAMPLE_MULTILINGUAL_QUERIES.map((item, idx) => (
                 <button
                   key={idx}
-                  onClick={() => onSendMessage(q, false)}
+                  onClick={() => onSendMessage(item.query, false)}
                   disabled={botState !== "idle"}
-                  className="p-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs text-slate-200 hover:text-white flex items-center justify-between group transition-all text-left"
+                  className="p-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs text-slate-200 hover:text-white flex flex-col justify-between group transition-all text-left"
                 >
-                  <span className="truncate pr-2">{q}</span>
-                  <ArrowRight className="w-3.5 h-3.5 text-indigo-400 group-hover:translate-x-0.5 transition-transform shrink-0" />
+                  <div className="flex items-center justify-between w-full mb-1">
+                    <span className="font-semibold text-amber-300 text-[10px]">
+                      {item.flag} {item.label}
+                    </span>
+                    <ArrowRight className="w-3 h-3 text-indigo-400 group-hover:translate-x-0.5 transition-transform" />
+                  </div>
+                  <span className="truncate w-full text-slate-300 text-[11px]">{item.query}</span>
                 </button>
               ))}
             </div>
@@ -281,13 +361,20 @@ export const LiveVoiceStage: React.FC<LiveVoiceStageProps> = ({
       {/* Latest Conversational Turn Card with Grounding & Audio Replay */}
       {lastBotMessage && (
         <div className="bg-white rounded-2xl p-6 border border-slate-200/90 shadow-sm flex flex-col gap-4">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-3 flex-wrap gap-2">
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold text-xs">
                 AI
               </div>
               <div>
-                <h3 className="text-sm font-semibold text-slate-900">Latest VoiceBot Response</h3>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm font-semibold text-slate-900">VoiceBot Answer</h3>
+                  {lastBotMessage.languageName && (
+                    <span className="px-2 py-0.5 text-[10px] font-bold rounded-md bg-amber-50 text-amber-800 border border-amber-200 flex items-center gap-1">
+                      <Globe className="w-2.5 h-2.5" /> {lastBotMessage.languageName}
+                    </span>
+                  )}
+                </div>
                 <p className="text-[11px] text-slate-500">
                   Synthesized with Persona: {settings.voiceName}
                 </p>
@@ -299,7 +386,7 @@ export const LiveVoiceStage: React.FC<LiveVoiceStageProps> = ({
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition-colors"
             >
               <Play className="w-3.5 h-3.5 fill-indigo-700" />
-              Replay Voice
+              Replay Spoken Audio
             </button>
           </div>
 
@@ -350,7 +437,7 @@ export const LiveVoiceStage: React.FC<LiveVoiceStageProps> = ({
           type="text"
           value={textInput}
           onChange={(e) => setTextInput(e.target.value)}
-          placeholder="Or type a question to query company documentation..."
+          placeholder="Type question in English, Spanish (Español), Hindi (हिन्दी), French, German..."
           disabled={botState !== "idle"}
           className="flex-1 px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-xs"
         />

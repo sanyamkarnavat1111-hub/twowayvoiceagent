@@ -9,14 +9,16 @@ import { LiveVoiceStage } from "./components/LiveVoiceStage.js";
 import { TranscriptView } from "./components/TranscriptView.js";
 import { KnowledgeBaseManager } from "./components/KnowledgeBaseManager.js";
 import { VectorSearchWorkbench } from "./components/VectorSearchWorkbench.js";
+import { PythonArchitectureViewer } from "./components/PythonArchitectureViewer.js";
 import { SettingsModal } from "./components/SettingsModal.js";
-import { BotSettings, BotState, ChatMessage, CompanyDocument, VoiceName } from "./types.js";
+import { BotSettings, BotState, ChatMessage, CompanyDocument, LanguageCode, VoiceName } from "./types.js";
 import { VoiceSpeechEngine } from "./utils/audioUtils.js";
 import { vectorStoreInstance } from "./utils/vectorStore.js";
 import { executeAgenticRAG } from "./utils/ragEngine.js";
 
 const DEFAULT_SETTINGS: BotSettings = {
   voiceName: "Kore",
+  language: "auto",
   model: "gemini-3.7-flash",
   topK: 3,
   similarityThreshold: 0.25,
@@ -28,7 +30,7 @@ const DEFAULT_SETTINGS: BotSettings = {
 };
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<"voice" | "transcript" | "kb" | "vector-search">("voice");
+  const [activeTab, setActiveTab] = useState<"voice" | "transcript" | "kb" | "vector-search" | "python-backend">("voice");
   const [botState, setBotState] = useState<BotState>("idle");
   const [settings, setSettings] = useState<BotSettings>(DEFAULT_SETTINGS);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -75,18 +77,17 @@ export default function App() {
     setBotState("retrieving");
 
     try {
-      // 2. Execute Client-Side Agentic RAG Pipeline
+      // 2. Execute Multilingual Agentic RAG Pipeline
       const historyPayload = messages.slice(-8).map((m) => ({
         role: m.role,
         content: m.content,
       }));
 
-      // Simulate step transition for visual feedback
       setBotState("thinking");
 
       const ragResult = await executeAgenticRAG(text, historyPayload, settings);
 
-      // 3. Create Assistant Message
+      // 3. Create Assistant Message with Language Metadata
       const botMessage: ChatMessage = {
         id: `msg-bot-${Date.now()}`,
         role: "assistant",
@@ -94,16 +95,19 @@ export default function App() {
         timestamp: Date.now(),
         retrievedChunks: ragResult.retrievedChunks,
         agentTrace: ragResult.agentTrace,
+        detectedLanguage: ragResult.detectedLanguage,
+        languageName: ragResult.languageName,
       };
 
       setMessages((prev) => [...prev, botMessage]);
 
-      // 4. Play Voice Output (if autoSpeak is on)
+      // 4. Play Spoken Voice Output in the exact matching language
       if (settings.autoSpeak) {
         setBotState("speaking");
         speechEngineRef.current.speak(
           ragResult.answer,
           settings.voiceName,
+          ragResult.detectedLanguage || "en",
           () => setBotState("speaking"),
           () => setBotState("idle")
         );
@@ -115,7 +119,7 @@ export default function App() {
       const errorMessage: ChatMessage = {
         id: `msg-err-${Date.now()}`,
         role: "assistant",
-        content: `I encountered an issue querying the company documentation: ${err.message}. Please verify the query and try again.`,
+        content: `I encountered an issue querying the documentation: ${err.message}. Please verify the query and try again.`,
         timestamp: Date.now(),
       };
       setMessages((prev) => [...prev, errorMessage]);
@@ -123,7 +127,7 @@ export default function App() {
     }
   };
 
-  // Add Document to Client Vector DB
+  // Add Document to Vector DB
   const handleAddDocument = async (docData: {
     title: string;
     category: string;
@@ -135,7 +139,7 @@ export default function App() {
     refreshDocuments();
   };
 
-  // Delete Document from Client Vector DB
+  // Delete Document from Vector DB
   const handleDeleteDocument = async (id: string) => {
     vectorStoreInstance.deleteDocument(id);
     refreshDocuments();
@@ -147,12 +151,18 @@ export default function App() {
     refreshDocuments();
   };
 
-  // Test Voice Persona
-  const handleTestVoice = (voiceName: VoiceName) => {
-    speechEngineRef.current.speak(
-      `Hello! This is voice persona ${voiceName}. I am configured to answer your company documentation questions.`,
-      voiceName
-    );
+  // Test Voice Persona with Language
+  const handleTestVoice = (voiceName: VoiceName, lang: LanguageCode) => {
+    const testPhrases: Record<string, string> = {
+      es: `¡Hola! Esta es la persona de voz ${voiceName}. Responderé a sus preguntas sobre la documentación corporativa.`,
+      fr: `Bonjour ! Voici la persona vocale ${voiceName}. Je répondrai à vos questions sur la documentation.`,
+      hi: `नमस्ते! यह वॉयस पर्सोना ${voiceName} है। मैं आपके कंपनी दस्तावेज़ों से जुड़े सवालों के जवाब दूंगा।`,
+      de: `Hallo! Dies ist die Sprachpersona ${voiceName}. Ich beantworte Ihre Fragen zur Unternehmensdokumentation.`,
+      ja: `こんにちは！これは音声ペルソナ ${voiceName} です。企業ドキュメントに関するご質問にお答えします。`,
+      en: `Hello! This is voice persona ${voiceName}. I am configured to answer your company documentation questions.`,
+    };
+    const phrase = testPhrases[lang] || testPhrases.en;
+    speechEngineRef.current.speak(phrase, voiceName, lang === "auto" ? "en" : lang);
   };
 
   const lastBotMessage = [...messages].reverse().find((m) => m.role === "assistant");
@@ -176,6 +186,7 @@ export default function App() {
             botState={botState}
             setBotState={setBotState}
             settings={settings}
+            setSettings={setSettings}
             messages={messages}
             onSendMessage={handleSendMessage}
             lastBotMessage={lastBotMessage}
@@ -203,6 +214,8 @@ export default function App() {
         )}
 
         {activeTab === "vector-search" && <VectorSearchWorkbench />}
+
+        {activeTab === "python-backend" && <PythonArchitectureViewer />}
       </main>
 
       {/* Settings Modal */}

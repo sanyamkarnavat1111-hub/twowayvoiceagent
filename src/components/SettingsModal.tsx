@@ -1,28 +1,35 @@
-import React from "react";
-import { X, Volume2, Sparkles, Sliders, Shield, Play } from "lucide-react";
-import { BotSettings, VoiceName } from "../types.js";
+import React, { useState } from "react";
+import { X, Volume2, Sparkles, Sliders, Globe, Shield, RefreshCw } from "lucide-react";
+import { BotSettings, LanguageCode, VoiceName } from "../types.js";
 
 interface SettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
   settings: BotSettings;
   onSaveSettings: (settings: BotSettings) => void;
-  onTestVoice: (voiceName: VoiceName) => void;
+  onTestVoice: (voiceName: VoiceName, lang: LanguageCode) => void;
 }
 
-const AVAILABLE_VOICES: { name: VoiceName; gender: string; description: string }[] = [
-  { name: "Kore", gender: "Female", description: "Clear, warm, natural pacing" },
-  { name: "Puck", gender: "Male", description: "Energetic, engaging, friendly" },
-  { name: "Fenrir", gender: "Male", description: "Deep, authoritative, executive tone" },
-  { name: "Zephyr", gender: "Female", description: "Calm, supportive, melodic" },
-  { name: "Charon", gender: "Male", description: "Precise, confident, informative" },
+const VOICE_OPTIONS: { name: VoiceName; label: string; desc: string }[] = [
+  { name: "Kore", label: "Kore (Natural Female)", desc: "Calm, clear, and professional tone." },
+  { name: "Puck", label: "Puck (Energetic Male)", desc: "Friendly, upbeat, and quick pace." },
+  { name: "Fenrir", label: "Fenrir (Deep Authority)", desc: "Deep, authoritative voice for technical data." },
+  { name: "Zephyr", label: "Zephyr (Soft Warm)", desc: "Gentle and patient support specialist." },
+  { name: "Charon", label: "Charon (Balanced Neutral)", desc: "Neutral, crisp cadence." },
 ];
 
-const AVAILABLE_MODELS = [
-  { id: "gemini-3.7-flash", name: "Gemini 3.7 Flash (Default)", desc: "High reasoning, ultra-fast latency" },
-  { id: "gemini-3.5-flash", name: "Gemini 3.5 Flash", desc: "General tasks, balanced speed" },
-  { id: "gemini-3.1-flash-lite", name: "Gemini 3.1 Flash Lite", desc: "Lowest latency for voice turnarounds" },
-  { id: "gemini-3.1-pro-preview", name: "Gemini 3.1 Pro Preview", desc: "Complex multi-policy reasoning" },
+const LANGUAGE_OPTIONS: { code: LanguageCode; label: string; flag: string }[] = [
+  { code: "auto", label: "Auto-Detect Language (Spoken/Input)", flag: "🌐" },
+  { code: "en", label: "English (US / UK)", flag: "🇺🇸" },
+  { code: "es", label: "Español (Spanish)", flag: "🇪🇸" },
+  { code: "hi", label: "हिन्दी (Hindi)", flag: "🇮🇳" },
+  { code: "fr", label: "Français (French)", flag: "🇫🇷" },
+  { code: "de", label: "Deutsch (German)", flag: "🇩🇪" },
+  { code: "ja", label: "日本語 (Japanese)", flag: "🇯🇵" },
+  { code: "zh", label: "中文 (Chinese)", flag: "🇨🇳" },
+  { code: "pt", label: "Português (Portuguese)", flag: "🇧🇷" },
+  { code: "it", label: "Italiano (Italian)", flag: "🇮🇹" },
+  { code: "ar", label: "العربية (Arabic)", flag: "🇸🇦" },
 ];
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -32,9 +39,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onSaveSettings,
   onTestVoice,
 }) => {
-  if (!isOpen) return null;
+  const [localSettings, setLocalSettings] = useState<BotSettings>({ ...settings });
 
-  const [localSettings, setLocalSettings] = React.useState<BotSettings>(settings);
+  if (!isOpen) return null;
 
   const handleSave = () => {
     onSaveSettings(localSettings);
@@ -42,94 +49,110 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-      <div className="bg-white rounded-3xl max-w-xl w-full p-6 shadow-2xl border border-slate-200 flex flex-col max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl max-w-xl w-full max-h-[90vh] overflow-y-auto shadow-2xl border border-slate-200 flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-5">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
-              <Sliders className="w-4 h-4" />
-            </div>
-            <div>
-              <h3 className="text-base font-bold text-slate-900">VoiceBot & RAG Configuration</h3>
-              <p className="text-xs text-slate-500">Tune TTS voice models, vector similarity, and LLM reasoning</p>
-            </div>
+        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white z-10">
+          <div className="flex items-center gap-2">
+            <Sliders className="w-5 h-5 text-indigo-600" />
+            <h2 className="text-base font-bold text-slate-900">VoiceBot & Multilingual Configuration</h2>
           </div>
-
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+            className="p-1 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100 transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <div className="space-y-5">
-          {/* TTS Voice Selection */}
+        {/* Settings Body */}
+        <div className="p-6 space-y-6">
+          {/* Multilingual Voice Language */}
           <div>
-            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
-              Gemini TTS Voice (gemini-3.1-flash-tts-preview)
+            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+              <Globe className="w-3.5 h-3.5 text-indigo-600" /> Spoken Input & Output Language
             </label>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {AVAILABLE_VOICES.map((v) => (
+            <select
+              value={localSettings.language}
+              onChange={(e) =>
+                setLocalSettings({
+                  ...localSettings,
+                  language: e.target.value as LanguageCode,
+                })
+              }
+              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            >
+              {LANGUAGE_OPTIONS.map((opt) => (
+                <option key={opt.code} value={opt.code}>
+                  {opt.flag} {opt.label}
+                </option>
+              ))}
+            </select>
+            <p className="text-[11px] text-slate-500 mt-1">
+              In "Auto-Detect", the VoiceBot dynamically detects whether you speak in English, Spanish, Hindi, French, German, or Japanese, and speaks back in the matching tongue.
+            </p>
+          </div>
+
+          {/* Voice Persona Selection */}
+          <div>
+            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+              <Volume2 className="w-3.5 h-3.5 text-indigo-600" /> Voice Synthesis Persona
+            </label>
+            <div className="space-y-2">
+              {VOICE_OPTIONS.map((voice) => (
                 <div
-                  key={v.name}
-                  onClick={() => setLocalSettings({ ...localSettings, voiceName: v.name })}
-                  className={`p-3 rounded-xl border cursor-pointer transition-all flex items-center justify-between ${
-                    localSettings.voiceName === v.name
-                      ? "bg-indigo-50 border-indigo-300 ring-1 ring-indigo-200"
-                      : "bg-white border-slate-200 hover:bg-slate-50"
+                  key={voice.name}
+                  onClick={() => setLocalSettings({ ...localSettings, voiceName: voice.name })}
+                  className={`p-3 rounded-xl border flex items-center justify-between cursor-pointer transition-all ${
+                    localSettings.voiceName === voice.name
+                      ? "bg-indigo-50/70 border-indigo-500 shadow-xs"
+                      : "bg-slate-50 hover:bg-slate-100 border-slate-200"
                   }`}
                 >
                   <div>
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-xs font-bold text-slate-900">{v.name}</span>
-                      <span className="text-[10px] px-1.5 py-0.2 rounded bg-slate-100 text-slate-600">
-                        {v.gender}
-                      </span>
-                    </div>
-                    <p className="text-[10px] text-slate-500 mt-0.5">{v.description}</p>
+                    <div className="text-sm font-bold text-slate-900">{voice.label}</div>
+                    <div className="text-xs text-slate-500">{voice.desc}</div>
                   </div>
-
                   <button
                     type="button"
                     onClick={(e) => {
                       e.stopPropagation();
-                      onTestVoice(v.name);
+                      onTestVoice(voice.name, localSettings.language);
                     }}
-                    className="p-1.5 text-indigo-600 hover:bg-indigo-100 rounded-lg"
-                    title={`Test voice ${v.name}`}
+                    className="px-3 py-1 text-xs font-semibold text-indigo-700 bg-white border border-indigo-200 hover:bg-indigo-50 rounded-lg transition-colors shadow-xs"
                   >
-                    <Play className="w-3.5 h-3.5 fill-indigo-600" />
+                    Test Audio
                   </button>
                 </div>
               ))}
             </div>
           </div>
 
-          {/* Model Selection */}
-          <div>
-            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
-              Gemini Intelligence Model
-            </label>
-            <select
-              value={localSettings.model}
-              onChange={(e) => setLocalSettings({ ...localSettings, model: e.target.value as any })}
-              className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white font-medium"
-            >
-              {AVAILABLE_MODELS.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.name} — {m.desc}
-                </option>
-              ))}
-            </select>
+          {/* Auto Speak Audio Toggle */}
+          <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-200">
+            <div>
+              <div className="text-sm font-semibold text-slate-800">Auto-Play Spoken Voice</div>
+              <div className="text-xs text-slate-500">Automatically synthesize and speak answers immediately upon generation</div>
+            </div>
+            <input
+              type="checkbox"
+              checked={localSettings.autoSpeak}
+              onChange={(e) => setLocalSettings({ ...localSettings, autoSpeak: e.target.checked })}
+              className="w-5 h-5 accent-indigo-600 cursor-pointer"
+            />
           </div>
 
-          {/* Vector Retrieval Top-K and Similarity Threshold */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 bg-slate-50 rounded-2xl border border-slate-100">
+          {/* Vector Retrieval Hyperparameters */}
+          <div className="space-y-4 pt-2 border-t border-slate-100">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5 text-amber-500" /> Vector Retrieval Hyperparameters
+            </h3>
+
+            {/* Top-K Chunks */}
             <div>
-              <div className="flex justify-between text-xs font-bold text-slate-700 mb-1">
-                <span>Top-K Chunks: {localSettings.topK}</span>
+              <div className="flex justify-between text-xs font-medium text-slate-700 mb-1">
+                <span>Top-K Context Chunks:</span>
+                <span className="font-bold text-indigo-600">{localSettings.topK}</span>
               </div>
               <input
                 type="range"
@@ -140,12 +163,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 onChange={(e) => setLocalSettings({ ...localSettings, topK: Number(e.target.value) })}
                 className="w-full accent-indigo-600"
               />
-              <span className="text-[10px] text-slate-400">Number of documentation chunks to feed into prompt</span>
             </div>
 
+            {/* Cosine Similarity Threshold */}
             <div>
-              <div className="flex justify-between text-xs font-bold text-slate-700 mb-1">
-                <span>Min Similarity: {localSettings.similarityThreshold}</span>
+              <div className="flex justify-between text-xs font-medium text-slate-700 mb-1">
+                <span>Minimum Cosine Threshold:</span>
+                <span className="font-bold text-indigo-600">{localSettings.similarityThreshold}</span>
               </div>
               <input
                 type="range"
@@ -158,35 +182,23 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 }
                 className="w-full accent-indigo-600"
               />
-              <span className="text-[10px] text-slate-400">Cosine threshold to filter irrelevant chunks</span>
             </div>
-          </div>
-
-          {/* Toggles */}
-          <div className="flex flex-col gap-2.5">
-            <label className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-100 cursor-pointer">
-              <span className="text-xs font-semibold text-slate-800">Auto-Synthesize Voice (Gemini TTS)</span>
-              <input
-                type="checkbox"
-                checked={localSettings.autoSpeak}
-                onChange={(e) => setLocalSettings({ ...localSettings, autoSpeak: e.target.checked })}
-                className="w-4 h-4 accent-indigo-600 rounded"
-              />
-            </label>
           </div>
         </div>
 
-        {/* Action Buttons */}
-        <div className="flex items-center justify-end gap-3 pt-5 mt-5 border-t border-slate-100">
+        {/* Footer Actions */}
+        <div className="px-6 py-4 border-t border-slate-100 bg-slate-50 flex items-center justify-end gap-2 sticky bottom-0">
           <button
+            type="button"
             onClick={onClose}
-            className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl"
+            className="px-4 py-2 text-sm font-semibold text-slate-600 hover:text-slate-900 rounded-xl hover:bg-slate-200 transition-colors"
           >
             Cancel
           </button>
           <button
+            type="button"
             onClick={handleSave}
-            className="px-5 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-xs"
+            className="px-5 py-2 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-xs transition-colors"
           >
             Save Settings
           </button>

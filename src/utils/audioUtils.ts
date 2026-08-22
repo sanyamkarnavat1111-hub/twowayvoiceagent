@@ -1,4 +1,19 @@
-import { VoiceName } from '../types.js';
+import { VoiceName, LanguageCode } from '../types.js';
+
+export const LANGUAGE_LOCALES: Record<string, string> = {
+  en: 'en-US',
+  es: 'es-ES',
+  fr: 'fr-FR',
+  de: 'de-DE',
+  hi: 'hi-IN',
+  ja: 'ja-JP',
+  zh: 'zh-CN',
+  pt: 'pt-BR',
+  it: 'it-IT',
+  ar: 'ar-SA',
+  ru: 'ru-RU',
+  ko: 'ko-KR',
+};
 
 export class VoiceSpeechEngine {
   private currentUtterance: SpeechSynthesisUtterance | null = null;
@@ -7,6 +22,7 @@ export class VoiceSpeechEngine {
   public speak(
     text: string,
     voiceName: VoiceName = 'Kore',
+    targetLang: string = 'en',
     onStart?: () => void,
     onEnd?: () => void
   ): void {
@@ -33,43 +49,63 @@ export class VoiceSpeechEngine {
     const utterance = new SpeechSynthesisUtterance(cleanText);
     this.currentUtterance = utterance;
 
-    // Pick appropriate browser voice and pitch based on persona
+    const locale = LANGUAGE_LOCALES[targetLang] || (targetLang.includes('-') ? targetLang : 'en-US');
+    utterance.lang = locale;
+
+    // Pick appropriate browser voice based on target language and persona
     const voices = window.speechSynthesis.getVoices();
     let selectedVoice = null;
 
-    if (voiceName === 'Kore' || voiceName === 'Zephyr') {
-      // Female voice profile
-      selectedVoice = voices.find(
-        (v) =>
-          v.lang.startsWith('en') &&
-          (v.name.toLowerCase().includes('female') ||
-            v.name.toLowerCase().includes('samantha') ||
-            v.name.toLowerCase().includes('victoria') ||
-            v.name.toLowerCase().includes('karen') ||
-            v.name.toLowerCase().includes('zira') ||
-            v.name.toLowerCase().includes('google us english') ||
-            v.name.toLowerCase().includes('natural'))
-      );
-      utterance.pitch = voiceName === 'Zephyr' ? 1.05 : 1.0;
-      utterance.rate = 1.0;
+    // First try to match the exact target language locale (e.g. es, hi, fr, de, ja, zh)
+    const matchingLangVoices = voices.filter(
+      (v) => v.lang.toLowerCase().startsWith(targetLang.toLowerCase()) || v.lang.toLowerCase().startsWith(locale.toLowerCase().slice(0, 2))
+    );
+
+    if (matchingLangVoices.length > 0) {
+      if (voiceName === 'Kore' || voiceName === 'Zephyr') {
+        selectedVoice =
+          matchingLangVoices.find((v) => v.name.toLowerCase().includes('female') || v.name.toLowerCase().includes('natural')) ||
+          matchingLangVoices[0];
+        utterance.pitch = voiceName === 'Zephyr' ? 1.05 : 1.0;
+      } else {
+        selectedVoice =
+          matchingLangVoices.find((v) => v.name.toLowerCase().includes('male')) ||
+          matchingLangVoices[0];
+        utterance.pitch = voiceName === 'Fenrir' ? 0.9 : voiceName === 'Puck' ? 1.1 : 0.95;
+      }
     } else {
-      // Male voice profile (Puck, Fenrir, Charon)
-      selectedVoice = voices.find(
-        (v) =>
-          v.lang.startsWith('en') &&
-          (v.name.toLowerCase().includes('male') ||
-            v.name.toLowerCase().includes('alex') ||
-            v.name.toLowerCase().includes('daniel') ||
-            v.name.toLowerCase().includes('david') ||
-            v.name.toLowerCase().includes('george'))
-      );
-      utterance.pitch = voiceName === 'Fenrir' ? 0.85 : voiceName === 'Puck' ? 1.1 : 0.95;
-      utterance.rate = voiceName === 'Puck' ? 1.05 : 0.98;
+      // Fallback to standard voice selection
+      if (voiceName === 'Kore' || voiceName === 'Zephyr') {
+        selectedVoice = voices.find(
+          (v) =>
+            v.lang.startsWith('en') &&
+            (v.name.toLowerCase().includes('female') ||
+              v.name.toLowerCase().includes('samantha') ||
+              v.name.toLowerCase().includes('victoria') ||
+              v.name.toLowerCase().includes('karen') ||
+              v.name.toLowerCase().includes('zira') ||
+              v.name.toLowerCase().includes('natural'))
+        );
+        utterance.pitch = voiceName === 'Zephyr' ? 1.05 : 1.0;
+      } else {
+        selectedVoice = voices.find(
+          (v) =>
+            v.lang.startsWith('en') &&
+            (v.name.toLowerCase().includes('male') ||
+              v.name.toLowerCase().includes('alex') ||
+              v.name.toLowerCase().includes('daniel') ||
+              v.name.toLowerCase().includes('david') ||
+              v.name.toLowerCase().includes('george'))
+        );
+        utterance.pitch = voiceName === 'Fenrir' ? 0.9 : voiceName === 'Puck' ? 1.1 : 0.95;
+      }
     }
 
     if (selectedVoice) {
       utterance.voice = selectedVoice;
     }
+
+    utterance.rate = 1.0;
 
     utterance.onstart = () => {
       this.isSpeakingState = true;
@@ -89,7 +125,6 @@ export class VoiceSpeechEngine {
       if (onEnd) onEnd();
     };
 
-    // Pre-cancel to clear any stuck queue
     window.speechSynthesis.cancel();
     window.speechSynthesis.speak(utterance);
   }
@@ -103,15 +138,21 @@ export class VoiceSpeechEngine {
   }
 
   public isSpeaking(): boolean {
-    return this.isSpeakingState || (typeof window !== 'undefined' && 'speechSynthesis' in window && window.speechSynthesis.speaking);
+    return (
+      this.isSpeakingState ||
+      (typeof window !== 'undefined' &&
+        'speechSynthesis' in window &&
+        window.speechSynthesis.speaking)
+    );
   }
 }
 
 export class BrowserSpeechRecognizer {
   private recognition: any = null;
   private isListening: boolean = false;
+  private currentLanguage: string = 'en-US';
 
-  constructor() {
+  constructor(langCode: string = 'auto') {
     const SpeechRec =
       (window as any).SpeechRecognition ||
       (window as any).webkitSpeechRecognition;
@@ -120,7 +161,15 @@ export class BrowserSpeechRecognizer {
       this.recognition = new SpeechRec();
       this.recognition.continuous = false;
       this.recognition.interimResults = true;
-      this.recognition.lang = 'en-US';
+      this.setLanguage(langCode);
+    }
+  }
+
+  public setLanguage(langCode: string): void {
+    const locale = langCode === 'auto' ? 'en-US' : LANGUAGE_LOCALES[langCode] || langCode;
+    this.currentLanguage = locale;
+    if (this.recognition) {
+      this.recognition.lang = locale;
     }
   }
 
@@ -131,11 +180,20 @@ export class BrowserSpeechRecognizer {
   public startListening(
     onResult: (transcript: string, isFinal: boolean) => void,
     onError: (err: any) => void,
-    onEnd: () => void
+    onEnd: () => void,
+    langCode?: string
   ): void {
     if (!this.recognition) {
-      onError(new Error('Web Speech Recognition API is not supported in this browser. Please use manual typing or upload.'));
+      onError(
+        new Error(
+          'Web Speech Recognition API is not supported in this browser. Please use manual typing or upload.'
+        )
+      );
       return;
+    }
+
+    if (langCode) {
+      this.setLanguage(langCode);
     }
 
     this.isListening = true;

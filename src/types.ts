@@ -38,6 +38,8 @@ export interface AgenticTraceStep {
 
 export interface AgenticTrace {
   query: string;
+  detectedLanguage?: string;
+  languageName?: string;
   steps: AgenticTraceStep[];
   retrievedCount: number;
   topScore: number;
@@ -55,12 +57,30 @@ export interface ChatMessage {
   retrievedChunks?: RetrievedChunkMatch[];
   agentTrace?: AgenticTrace;
   isVoiceInput?: boolean;
+  detectedLanguage?: string;
+  languageName?: string;
 }
 
 export type VoiceName = 'Kore' | 'Puck' | 'Fenrir' | 'Zephyr' | 'Charon';
 
+export type LanguageCode =
+  | 'auto'
+  | 'en'
+  | 'es'
+  | 'fr'
+  | 'de'
+  | 'hi'
+  | 'ja'
+  | 'zh'
+  | 'pt'
+  | 'it'
+  | 'ar'
+  | 'ru'
+  | 'ko';
+
 export interface BotSettings {
   voiceName: VoiceName;
+  language: LanguageCode;
   model: 'gemini-3.7-flash' | 'gemini-3.5-flash' | 'gemini-3.1-flash-lite' | 'gemini-3.1-pro-preview';
   topK: number;
   similarityThreshold: number;

@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Play, Volume2, Sparkles, Database, Clock, ChevronDown, ChevronUp, Bot, User, CheckCircle2, Mic, Code } from "lucide-react";
+import { Play, Volume2, Sparkles, Database, Clock, ChevronDown, ChevronUp, Bot, User, CheckCircle2, Mic, Globe } from "lucide-react";
 import { ChatMessage, RetrievedChunkMatch, BotSettings } from "../types.js";
 import { VoiceSpeechEngine } from "../utils/audioUtils.js";
 
@@ -30,6 +30,7 @@ export const TranscriptView: React.FC<TranscriptViewProps> = ({
     speechEngine.speak(
       message.content,
       settings.voiceName,
+      message.detectedLanguage || "en",
       () => setActivePlayingId(message.id),
       () => setActivePlayingId(null)
     );
@@ -43,9 +44,9 @@ export const TranscriptView: React.FC<TranscriptViewProps> = ({
     <div className="max-w-4xl mx-auto flex flex-col gap-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-bold text-slate-900">Conversation Transcripts & Agentic Traces</h2>
+          <h2 className="text-lg font-bold text-slate-900">Conversation Transcripts & Multilingual Traces</h2>
           <p className="text-xs text-slate-500">
-            Full history of two-way voice inputs, RAG vector retrieval, and zero-exhaustion reasoning steps
+            Complete log of multilingual voice queries, language detection, vector retrieval, and spoken voice answers.
           </p>
         </div>
         <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100">
@@ -94,6 +95,11 @@ export const TranscriptView: React.FC<TranscriptViewProps> = ({
                       <Mic className="w-2.5 h-2.5" /> Spoken Audio
                     </span>
                   )}
+                  {msg.languageName && (
+                    <span className="flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold rounded-full bg-amber-50 text-amber-800 border border-amber-200">
+                      <Globe className="w-2.5 h-2.5" /> {msg.languageName}
+                    </span>
+                  )}
                 </div>
 
                 <div className="flex items-center gap-2">
@@ -112,11 +118,11 @@ export const TranscriptView: React.FC<TranscriptViewProps> = ({
                     >
                       {activePlayingId === msg.id ? (
                         <>
-                          <Volume2 className="w-3 h-3 animate-pulse" /> Stop
+                          <Volume2 className="w-3 h-3 animate-pulse" /> Stop Voice
                         </>
                       ) : (
                         <>
-                          <Play className="w-3 h-3 fill-indigo-700" /> Play Voice
+                          <Play className="w-3 h-3 fill-indigo-700" /> Play Spoken Voice
                         </>
                       )}
                     </button>
