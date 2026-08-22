@@ -1,0 +1,6 @@
+{
+  "name": "VoiceBot Agentic RAG",
+  "description": "Two-way conversational voice bot agent with dynamic vector search knowledge base RAG and voice synthesis.",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
